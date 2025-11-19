@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI Sheet Music</title>
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            background: white;
+        }
+        #controls-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 15px 25px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+        #controls-container.hidden {
+            transform: translateY(-100%);
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+        }
+        #toggle-ui {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #deviceList, #accidental-controls, #range-controls, #display-controls, #staff-controls {
+            display: none;
+            gap: 10px;
+            align-items: center;
+        }
+        #deviceSelect, .range-select, #maxNotesSelect, #clefSelect, #staffModeSelect {
+            padding: 6px 10px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #accidental-controls {
+            display: none;
+            gap: 15px;
+        }
+        #accidental-controls label, #display-controls label, #staff-controls label {
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #range-controls, #display-controls, #staff-controls {
+            display: none;
+            gap: 10px;
+            align-items: center;
+        }
+        .divider {
+            width: 1px;
+            height: 25px;
+            background: #ddd;
+        }
+        .shortcut {
+            color: #888;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .color-option-wrapper {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .color-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            border: 2px solid #666;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .color-swatch:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 8px rgba(0,0,0,0.3);
+        }
+        .color-swatch.active {
+            border: 3px solid #000;
+            box-shadow: 0 0 0 2px #fff, 0 0 0 4px #000;
+        }
+        #output {
+            margin-top: 20px;
+            margin-bottom: 15px;
+        }
+        #chord-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+            min-height: 36px;
+            visibility: hidden;
+        }
+        #chord-display.visible {
+            visibility: visible;
+        }
+        #piano {
+            display: flex;
+            margin-top: 15px;
+            padding: 2px;
+            background: #333;
+            border-radius: 3px;
+        }
+        .white-key {
+            background: white;
+            border: 0.5px solid #000;
+            border-radius: 0 0 5px 5px;
+            transition: background 0.1s;
+            cursor: pointer;
+            user-select: none;
+        }
+        .black-key {
+            background: #000;
+            border: 0.5px solid #000;
+            border-radius: 0 0 3px 3px;
+            z-index: 10;
+            transition: background 0.1s;
+            cursor: pointer;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <button id="toggle-ui">Hide UI</button>
+    
+    <div id="controls-container">
+        <button id="connect">Enable MIDI</button>
+        <div class="divider" id="divider1" style="display: none;"></div>
+        <div id="deviceList">
+            <label>MIDI Device:</label>
+            <select id="deviceSelect"></select>
+        </div>
+        <div class="divider" id="divider2" style="display: none;"></div>
+        <div id="accidental-controls">
+            <label>
+                <input type="radio" name="accidental" value="flat" checked> Flats
+            </label>
+            <label>
+                <input type="radio" name="accidental" value="sharp"> Sharps
+            </label>
+            <label>
+                <input type="radio" name="accidental" value="auto"> Auto
+            </label>
+            <span class="shortcut">(A)</span>
+        </div>
+        <div class="divider" id="divider3" style="display: none;"></div>
+        <div id="range-controls">
+            <label>From:</label>
+            <select id="lowestKey" class="range-select"></select>
+            <label>To:</label>
+            <select id="highestKey" class="range-select"></select>
+        </div>
+        <div class="divider" id="divider4" style="display: none;"></div>
+        <div id="staff-controls">
+            <label>Clef:</label>
+            <select id="clefSelect">
+                <option value="treble">Treble</option>
+                <option value="bass">Bass</option>
+                <option value="alto">Alto</option>
+            </select>
+            <label>Staff:</label>
+            <select id="staffModeSelect">
+                <option value="single">Single</option>
+                <option value="grand">Grand (Piano)</option>
+            </select>
+        </div>
+        <div class="divider" id="divider5" style="display: none;"></div>
+        <div id="display-controls">
+            <label>Max notes:</label>
+            <select id="maxNotesSelect">
+                <option value="1">1</option>
+                <option value="2" selected>2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+            </select>
+            <span class="shortcut">(1-8)</span>
+            <label>Color:</label>
+            <div class="color-option-wrapper" id="colorSwatches"></div>
+            <span class="shortcut">(C)</span>
+            <label>
+                <input type="checkbox" id="toggleMode"> Toggle mode <span class="shortcut">(T)</span>
+            </label>
+            <button id="resetBtn" style="display: none;">Reset <span class="shortcut">(R)</span></button>
+        </div>
+    </div>
+    
+    <div id="chord-display"></div>
+    <div id="output"></div>
+    <div id="piano"></div>
+
+    <script>
+        const VF = VexFlow;
+        const connectBtn = document.getElementById('connect');
+        const deviceList = document.getElementById('deviceList');
+        const deviceSelect = document.getElementById('deviceSelect');
+        const accidentalControls = document.getElementById('accidental-controls');
+        const rangeControls = document.getElementById('range-controls');
+        const displayControls = document.getElementById('display-controls');
+        const staffControls = document.getElementById('staff-controls');
+        const lowestKeySelect = document.getElementById('lowestKey');
+        const highestKeySelect = document.getElementById('highestKey');
+        const maxNotesSelect = document.getElementById('maxNotesSelect');
+        const clefSelect = document.getElementById('clefSelect');
+        const staffModeSelect = document.getElementById('staffModeSelect');
+        const colorSwatches = document.getElementById('colorSwatches');
+        const toggleModeCheckbox = document.getElementById('toggleMode');
+        const resetBtn = document.getElementById('resetBtn');
+        const toggleUIBtn = document.getElementById('toggle-ui');
+        const controlsContainer = document.getElementById('controls-container');
+        const chordDisplay = document.getElementById('chord-display');
+        
+        let currentInput = null;
+        let useFlats = 'flat';
+        let toggleMode = false;
+        let shiftHeld = false;
+        let uiVisible = true;
+        let selectedClef = 'treble';
+        let staffMode = 'single';
+        
+        const noteGroups = [];
+        const CHORD_THRESHOLD = 50;
+        let lastNoteTime = 0;
+        const pianoKeys = {};
+        const keyColors = {};
+        const toggledKeys = new Set();
+        let currentColor = '#ff0000';
+        let maxNotes = 2;
+        
+        let lowestMidi = 48;
+        let highestMidi = 72;
+
+        const allPianoKeys = [];
+        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        for (let midi = 21; midi <= 108; midi++) {
+            const octave = Math.floor(midi / 12) - 1;
+            const noteIndex = midi % 12;
+            const noteName = noteNames[noteIndex] + octave;
+            allPianoKeys.push({ midi, name: noteName, isBlack: noteNames[noteIndex].includes('#') });
+        }
+
+        const colors = [
+            '#ff0000', '#00ff00', '#0066ff', '#ffcc00',
+            '#ff00cc', '#00ccff', '#ff6600', '#cc00ff'
+        ];
+
+        // Key signatures: number of sharps (positive) or flats (negative)
+        const KEY_SIGNATURES = {
+            'C': { sharps: 0, scale: [0, 2, 4, 5, 7, 9, 11] },
+            'G': { sharps: 1, scale: [7, 9, 11, 0, 2, 4, 6] },
+            'D': { sharps: 2, scale: [2, 4, 6, 7, 9, 11, 1] },
+            'A': { sharps: 3, scale: [9, 11, 1, 2, 4, 6, 8] },
+            'E': { sharps: 4, scale: [4, 6, 8, 9, 11, 1, 3] },
+            'B': { sharps: 5, scale: [11, 1, 3, 4, 6, 8, 10] },
+            'F#': { sharps: 6, scale: [6, 8, 10, 11, 1, 3, 5] },
+            'F': { sharps: -1, scale: [5, 7, 9, 10, 0, 2, 4] },
+            'Bb': { sharps: -2, scale: [10, 0, 2, 3, 5, 7, 9] },
+            'Eb': { sharps: -3, scale: [3, 5, 7, 8, 10, 0, 2] },
+            'Ab': { sharps: -4, scale: [8, 10, 0, 1, 3, 5, 7] },
+            'Db': { sharps: -5, scale: [1, 3, 5, 6, 8, 10, 0] },
+            'Gb': { sharps: -6, scale: [6, 8, 10, 11, 1, 3, 5] }
+        };
+
+        function populateColorSwatches() {
+            colors.forEach((color, index) => {
+                const swatch = document.createElement('div');
+                swatch.className = 'color-swatch';
+                swatch.style.background = color;
+                swatch.dataset.color = color;
+                if (color === currentColor) {
+                    swatch.classList.add('active');
+                }
+                swatch.addEventListener('click', () => {
+                    currentColor = color;
+                    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+                    swatch.classList.add('active');
+                });
+                colorSwatches.appendChild(swatch);
+            });
+        }
+
+        function populateKeySelectors() {
+            allPianoKeys.forEach(key => {
+                const option1 = document.createElement('option');
+                option1.value = key.midi;
+                option1.textContent = key.name;
+                lowestKeySelect.appendChild(option1);
+                
+                const option2 = document.createElement('option');
+                option2.value = key.midi;
+                option2.textContent = key.name;
+                highestKeySelect.appendChild(option2);
+            });
+            
+            lowestKeySelect.value = lowestMidi;
+            highestKeySelect.value = highestMidi;
+        }
+
+        function createPiano() {
+            const piano = document.getElementById('piano');
+            piano.innerHTML = '';
+            Object.keys(pianoKeys).forEach(key => delete pianoKeys[key]);
+            
+            const keys = allPianoKeys.filter(k => k.midi >= lowestMidi && k.midi <= highestMidi);
+            const whiteKeyCount = keys.filter(k => !k.isBlack).length;
+            const availableWidth = Math.min(window.innerWidth - 100, 1400);
+            const whiteKeyWidth = Math.floor(availableWidth / whiteKeyCount);
+            const whiteKeyHeight = whiteKeyWidth * 4;
+            const blackKeyWidth = whiteKeyWidth * 0.6;
+            const blackKeyHeight = whiteKeyHeight * 0.6;
+            
+            keys.forEach(keyInfo => {
+                const key = document.createElement('div');
+                key.className = keyInfo.isBlack ? 'black-key' : 'white-key';
+                key.dataset.midi = keyInfo.midi;
+                
+                if (keyInfo.isBlack) {
+                    key.style.width = blackKeyWidth + 'px';
+                    key.style.height = blackKeyHeight + 'px';
+                    key.style.margin = `0 -${blackKeyWidth/2}px 0 -${blackKeyWidth/2}px`;
+                } else {
+                    key.style.width = whiteKeyWidth + 'px';
+                    key.style.height = whiteKeyHeight + 'px';
+                }
+                
+                key.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    simulateMIDI(parseInt(key.dataset.midi), true);
+                });
+                
+                key.addEventListener('mouseup', (e) => {
+                    e.preventDefault();
+                    if (!toggleMode) {
+                        simulateMIDI(parseInt(key.dataset.midi), false);
+                    }
+                });
+                
+                key.addEventListener('mouseleave', (e) => {
+                    const midiNote = parseInt(key.dataset.midi);
+                    if (!toggleMode && !toggledKeys.has(midiNote)) {
+                        simulateMIDI(midiNote, false);
+                    }
+                });
+                
+                piano.appendChild(key);
+                pianoKeys[keyInfo.midi] = key;
+                
+                if (keyColors[keyInfo.midi]) {
+                    key.style.background = keyColors[keyInfo.midi];
+                }
+            });
+        }
+
+        function simulateMIDI(note, isNoteOn) {
+            onMIDIMessage({
+                data: isNoteOn ? [0x90, note, 100] : [0x80, note, 0]
+            });
+        }
+
+        function rebuildNoteGroupsFromToggledKeys() {
+            // Remove all notes that are no longer in toggledKeys
+            noteGroups.forEach(group => {
+                const notesToRemove = [];
+                group.forEach(note => {
+                    if (!toggledKeys.has(note)) {
+                        notesToRemove.push(note);
+                    }
+                });
+                notesToRemove.forEach(note => group.delete(note));
+            });
+            
+            // Remove empty groups
+            for (let i = noteGroups.length - 1; i >= 0; i--) {
+                if (noteGroups[i].size === 0) {
+                    noteGroups.splice(i, 1);
+                }
+            }
+        }
+
+        function resetAllNotes() {
+            toggledKeys.clear();
+            noteGroups.length = 0;
+            Object.keys(keyColors).forEach(key => {
+                highlightKey(parseInt(key), false);
+            });
+            chordDisplay.textContent = '';
+            chordDisplay.classList.remove('visible');
+            drawNotation();
+        }
+
+        function highlightKey(midiNote, active, color) {
+            if (pianoKeys[midiNote]) {
+                if (active) {
+                    pianoKeys[midiNote].style.background = color;
+                    keyColors[midiNote] = color;
+                } else {
+                    pianoKeys[midiNote].style.background = '';
+                    delete keyColors[midiNote];
+                }
+            }
+        }
+
+        // ============= AUTO MODE FUNCTIONS =============
+        
+        function detectKey(midiNotes) {
+            // Detect the most likely key from a set of MIDI notes
+            const pitchClasses = new Set(midiNotes.map(n => n % 12));
+            let bestKey = 'C';
+            let bestScore = -1;
+            
+            for (const [keyName, keyData] of Object.entries(KEY_SIGNATURES)) {
+                let score = 0;
+                for (const pc of pitchClasses) {
+                    if (keyData.scale.includes(pc)) {
+                        score += 2; // Note is in the scale
+                    } else {
+                        score -= 1; // Note is not in the scale
+                    }
+                }
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestKey = keyName;
+                }
+            }
+            
+            return bestKey;
+        }
+        
+        function spellNoteInKey(midiNote, key) {
+            // Spell a single note according to a key signature
+            const pitchClass = midiNote % 12;
+            
+            // Define exact spelling for each pitch class in each key
+            const keySpellings = {
+                'C': { 0: 'C', 1: 'C#', 2: 'D', 3: 'Eb', 4: 'E', 5: 'F', 6: 'F#', 7: 'G', 8: 'Ab', 9: 'A', 10: 'Bb', 11: 'B' },
+                'G': { 0: 'C', 1: 'C#', 2: 'D', 3: 'Eb', 4: 'E', 5: 'F', 6: 'F#', 7: 'G', 8: 'Ab', 9: 'A', 10: 'Bb', 11: 'B' },
+                'D': { 0: 'C', 1: 'C#', 2: 'D', 3: 'Eb', 4: 'E', 5: 'F', 6: 'F#', 7: 'G', 8: 'G#', 9: 'A', 10: 'Bb', 11: 'B' },
+                'A': { 0: 'C', 1: 'C#', 2: 'D', 3: 'D#', 4: 'E', 5: 'F', 6: 'F#', 7: 'G', 8: 'G#', 9: 'A', 10: 'Bb', 11: 'B' },
+                'E': { 0: 'C', 1: 'C#', 2: 'D', 3: 'D#', 4: 'E', 5: 'F', 6: 'F#', 7: 'G', 8: 'G#', 9: 'A', 10: 'A#', 11: 'B' },
+                'B': { 0: 'C', 1: 'C#', 2: 'D', 3: 'D#', 4: 'E', 5: 'F', 6: 'F#', 7: 'G', 8: 'G#', 9: 'A', 10: 'A#', 11: 'B' },
+                'F#': { 0: 'C', 1: 'C#', 2: 'D', 3: 'D#', 4: 'E', 5: 'E#', 6: 'F#', 7: 'G', 8: 'G#', 9: 'A', 10: 'A#', 11: 'B' },
+                'F': { 0: 'C', 1: 'Db', 2: 'D', 3: 'Eb', 4: 'E', 5: 'F', 6: 'Gb', 7: 'G', 8: 'Ab', 9: 'A', 10: 'Bb', 11: 'B' },
+                'Bb': { 0: 'C', 1: 'Db', 2: 'D', 3: 'Eb', 4: 'E', 5: 'F', 6: 'Gb', 7: 'G', 8: 'Ab', 9: 'A', 10: 'Bb', 11: 'B' },
+                'Eb': { 0: 'C', 1: 'Db', 2: 'D', 3: 'Eb', 4: 'E', 5: 'F', 6: 'Gb', 7: 'G', 8: 'Ab', 9: 'A', 10: 'Bb', 11: 'Cb' },
+                'Ab': { 0: 'C', 1: 'Db', 2: 'D', 3: 'Eb', 4: 'E', 5: 'F', 6: 'Gb', 7: 'G', 8: 'Ab', 9: 'A', 10: 'Bb', 11: 'Cb' },
+                'Db': { 0: 'C', 1: 'Db', 2: 'D', 3: 'Eb', 4: 'Fb', 5: 'F', 6: 'Gb', 7: 'G', 8: 'Ab', 9: 'A', 10: 'Bb', 11: 'Cb' },
+                'Gb': { 0: 'C', 1: 'Db', 2: 'D', 3: 'Eb', 4: 'Fb', 5: 'F', 6: 'Gb', 7: 'G', 8: 'Ab', 9: 'A', 10: 'Bb', 11: 'Cb' }
+            };
+            
+            const spelling = keySpellings[key][pitchClass];
+            const noteName = spelling.charAt(0);
+            const accidental = spelling.length > 1 ? spelling.charAt(1) : null;
+            
+            // Calculate the correct octave by trying to match the MIDI note
+            const naturalPitchClasses = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 };
+            const naturalPC = naturalPitchClasses[noteName];
+            
+            let accidentalOffset = 0;
+            if (accidental === '#') accidentalOffset = 1;
+            else if (accidental === 'b') accidentalOffset = -1;
+            
+            // Try different octaves to find the one that matches
+            for (let oct = -2; oct <= 10; oct++) {
+                const calculatedMIDI = (oct + 1) * 12 + naturalPC + accidentalOffset;
+                if (calculatedMIDI === midiNote) {
+                    return { note: noteName, octave: oct, accidental, midi: midiNote };
+                }
+            }
+            
+            // Fallback (should never reach here)
+            const octave = Math.floor(midiNote / 12) - 1;
+            return { note: noteName, octave, accidental, midi: midiNote };
+        }
+        
+        function spellTwoNoteInterval(note1Midi, note2Midi) {
+            // Spell two notes to avoid augmented/diminished intervals
+            // Keep track of which note came first
+            const first = note1Midi;
+            const second = note2Midi;
+            const lower = Math.min(note1Midi, note2Midi);
+            const upper = Math.max(note1Midi, note2Midi);
+            const interval = upper - lower;
+            const semitones = interval % 12;
+            
+            // Map semitones to letter distance (0-6)
+            const semitonesToLetterDistance = {
+                0: 0, 1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 3,
+                7: 4, 8: 5, 9: 5, 10: 6, 11: 6
+            };
+            
+            const targetLetterDistance = semitonesToLetterDistance[semitones];
+            const letters = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+            
+            // Try both sharp and flat spellings for lower note (if it's a black key)
+            const lowerPC = lower % 12;
+            const lowerOctave = Math.floor(lower / 12) - 1;
+            const upperPC = upper % 12;
+            const upperOctave = Math.floor(upper / 12) - 1;
+            
+            const isBlackKey = [1, 3, 6, 8, 10].includes(lowerPC);
+            
+            const spellingOptions = [];
+            
+            if (isBlackKey) {
+                // Try flat spelling
+                const flatNames = { 1: 'D', 3: 'E', 6: 'G', 8: 'A', 10: 'B' };
+                spellingOptions.push({
+                    lower: { note: flatNames[lowerPC], octave: lowerOctave, accidental: 'b', midi: lower },
+                    letterIndex: letters.indexOf(flatNames[lowerPC]),
+                    preference: 0
+                });
+                // Try sharp spelling
+                const sharpNames = { 1: 'C', 3: 'D', 6: 'F', 8: 'G', 10: 'A' };
+                spellingOptions.push({
+                    lower: { note: sharpNames[lowerPC], octave: lowerOctave, accidental: '#', midi: lower },
+                    letterIndex: letters.indexOf(sharpNames[lowerPC]),
+                    preference: 0
+                });
+            } else {
+                // Natural note
+                const naturalNames = { 0: 'C', 2: 'D', 4: 'E', 5: 'F', 7: 'G', 9: 'A', 11: 'B' };
+                spellingOptions.push({
+                    lower: { note: naturalNames[lowerPC], octave: lowerOctave, accidental: null, midi: lower },
+                    letterIndex: letters.indexOf(naturalNames[lowerPC]),
+                    preference: 1 // Prefer natural notes
+                });
+            }
+            
+            // For each lower spelling, determine upper spelling
+            let bestSpelling = null;
+            let bestPreference = -999;
+            
+            for (const option of spellingOptions) {
+                const upperLetterIndex = (option.letterIndex + targetLetterDistance) % 7;
+                const upperLetter = letters[upperLetterIndex];
+                
+                // Calculate what accidental is needed
+                const naturalPitchClasses = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 };
+                const upperNaturalPC = naturalPitchClasses[upperLetter];
+                
+                // Calculate correct octave for upper note
+                // We need to account for whether the letter wraps around
+                const lowerLetter = option.lower.note;
+                const lowerLetterIndex = letters.indexOf(lowerLetter);
+                
+                let calculatedUpperOctave = upperOctave;
+                
+                // If we're going from a higher letter to a lower letter (e.g., A to C), 
+                // and the upper MIDI note is actually higher, we need to add an octave
+                if (upperLetterIndex < lowerLetterIndex && upper > lower) {
+                    calculatedUpperOctave = lowerOctave + 1;
+                } else if (upperLetterIndex > lowerLetterIndex && upper > lower) {
+                    // Normal ascending within same letter range
+                    calculatedUpperOctave = lowerOctave;
+                } else if (upperLetterIndex === lowerLetterIndex) {
+                    // Same letter, check if we need different octave
+                    if (upper > lower) {
+                        calculatedUpperOctave = lowerOctave + 1;
+                    } else {
+                        calculatedUpperOctave = lowerOctave;
+                    }
+                }
+                
+                // Now check what accidental is needed at this octave
+                const expectedMidi = (calculatedUpperOctave + 1) * 12 + upperNaturalPC;
+                const difference = upperPC - upperNaturalPC;
+                
+                let accidental = null;
+                let needsAdjustment = false;
+                
+                if (upper === expectedMidi) {
+                    accidental = null;
+                } else if (upper === expectedMidi + 1) {
+                    accidental = '#';
+                } else if (upper === expectedMidi - 1) {
+                    accidental = 'b';
+                } else {
+                    // Would require double sharp/flat or wrong octave - skip this option
+                    continue;
+                }
+                
+                // Calculate preference score
+                let preference = option.preference;
+                
+                // Penalize awkward spellings
+                if (accidental === 'b' && ['C', 'F'].includes(upperLetter)) {
+                    preference -= 2; // Cb, Fb are awkward
+                }
+                if (accidental === '#' && ['B', 'E'].includes(upperLetter)) {
+                    preference -= 2; // B#, E# are awkward
+                }
+                if (accidental === null) {
+                    preference += 1; // Prefer natural notes in upper voice too
+                }
+                
+                if (preference > bestPreference) {
+                    const lowerSpelling = option.lower;
+                    const upperSpelling = { note: upperLetter, octave: calculatedUpperOctave, accidental, midi: upper };
+                    
+                    // Return notes in the order they were played
+                    if (first === lower) {
+                        bestSpelling = { notes: [lowerSpelling, upperSpelling] };
+                    } else {
+                        bestSpelling = { notes: [upperSpelling, lowerSpelling] };
+                    }
+                    bestPreference = preference;
+                }
+            }
+            
+            return bestSpelling;
+        }
+        
+        function recognizeChord(midiNotes) {
+            // Recognize common chords from 3+ simultaneous notes
+            const sorted = [...midiNotes].sort((a, b) => a - b);
+            if (sorted.length < 3) return null;
+            
+            // Get pitch classes relative to bass
+            const bass = sorted[0];
+            const pitchClasses = sorted.map(n => (n - bass) % 12).sort((a, b) => a - b);
+            const pattern = pitchClasses.join(',');
+            
+            // Chord database: pattern -> { type, root position offset, quality }
+            const chordDB = {
+                // Triads
+                '0,4,7': { type: 'major', rootOffset: 0, symbol: '' },
+                '0,3,8': { type: 'major', rootOffset: 2, symbol: '' }, // 1st inv
+                '0,5,9': { type: 'major', rootOffset: 1, symbol: '' }, // 2nd inv
+                
+                '0,3,7': { type: 'minor', rootOffset: 0, symbol: 'm' },
+                '0,4,9': { type: 'minor', rootOffset: 2, symbol: 'm' }, // 1st inv
+                '0,5,8': { type: 'minor', rootOffset: 1, symbol: 'm' }, // 2nd inv
+                
+                '0,3,6': { type: 'diminished', rootOffset: 0, symbol: 'dim' },
+                '0,3,9': { type: 'diminished', rootOffset: 2, symbol: 'dim' }, // 1st inv
+                '0,6,9': { type: 'diminished', rootOffset: 1, symbol: 'dim' }, // 2nd inv
+                
+                '0,4,8': { type: 'augmented', rootOffset: 0, symbol: 'aug' },
+                
+                // 7th chords
+                '0,4,7,11': { type: 'major7', rootOffset: 0, symbol: 'maj7' },
+                '0,3,7,8': { type: 'major7', rootOffset: 3, symbol: 'maj7' },
+                '0,4,5,9': { type: 'major7', rootOffset: 2, symbol: 'maj7' },
+                '0,1,5,8': { type: 'major7', rootOffset: 1, symbol: 'maj7' },
+                
+                '0,4,7,10': { type: 'dominant7', rootOffset: 0, symbol: '7' },
+                '0,3,6,8': { type: 'dominant7', rootOffset: 3, symbol: '7' },
+                '0,3,5,9': { type: 'dominant7', rootOffset: 2, symbol: '7' },
+                '0,2,6,9': { type: 'dominant7', rootOffset: 1, symbol: '7' },
+                
+                '0,3,7,10': { type: 'minor7', rootOffset: 0, symbol: 'm7' },
+                '0,4,7,9': { type: 'minor7', rootOffset: 3, symbol: 'm7' },
+                '0,3,5,8': { type: 'minor7', rootOffset: 2, symbol: 'm7' },
+                '0,2,5,9': { type: 'minor7', rootOffset: 1, symbol: 'm7' }
+            };
+            
+            const chordInfo = chordDB[pattern];
+            if (!chordInfo) return null;
+            
+            // Find the root note
+            const root = sorted[chordInfo.rootOffset];
+            const rootPC = root % 12;
+            const rootOctave = Math.floor(root / 12) - 1;
+            
+            // Determine root name with preferred enharmonic spellings
+            const noteNames = {
+                0: 'C', 2: 'D', 4: 'E', 5: 'F', 7: 'G', 9: 'A', 11: 'B',
+                1: chordInfo.type.includes('minor') ? 'C#' : 'Db',  // C# minor, Db major
+                3: 'Eb',  // Prefer Eb for both major and minor
+                6: chordInfo.type.includes('minor') ? 'F#' : 'F#',  // F# for both (avoid Gb)
+                8: chordInfo.type === 'diminished' ? 'G#' : (chordInfo.type.includes('minor') ? 'G#' : 'Ab'),  // G# for dim, G# minor, Ab major
+                10: 'Bb'
+            };
+            
+            const rootName = noteNames[rootPC];
+            const chordSymbol = rootName + chordInfo.symbol;
+            
+            // Spell each note properly based on chord structure
+            const letters = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+            const rootLetter = rootName.charAt(0);
+            const rootLetterIdx = letters.indexOf(rootLetter);
+            
+            // Intervals in chord: root=0, 3rd=2, 5th=4, 7th=6 letter steps
+            const letterOffsets = {
+                'major': [0, 2, 4],
+                'minor': [0, 2, 4],
+                'diminished': [0, 2, 4],
+                'augmented': [0, 2, 4],
+                'major7': [0, 2, 4, 6],
+                'dominant7': [0, 2, 4, 6],
+                'minor7': [0, 2, 4, 6]
+            };
+            
+            const offsets = letterOffsets[chordInfo.type];
+            const result = [];
+            
+            // Sort by semitones from root to assign roles
+            const fromRoot = sorted.map(n => ({ midi: n, interval: (n - root + 120) % 12 }));
+            fromRoot.sort((a, b) => a.interval - b.interval);
+            
+            const intervalToRole = {
+                0: 0, // root
+                3: 1, 4: 1, // 3rd (minor/major)
+                6: 2, 7: 2, 8: 2, // 5th (dim/perfect/aug)
+                10: 3, 11: 3 // 7th (minor/major)
+            };
+            
+            for (const note of sorted) {
+                const interval = (note - root + 120) % 12;
+                const role = intervalToRole[interval];
+                if (role === undefined) continue;
+                
+                const letterOffset = offsets[role];
+                const noteLetter = letters[(rootLetterIdx + letterOffset) % 7];
+                const baseNoteOctave = Math.floor(note / 12) - 1;
+                const naturalPC = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 }[noteLetter];
+                const actualPC = note % 12;
+                
+                // Calculate correct octave accounting for letter wrapping
+                let noteOctave = baseNoteOctave;
+                
+                // If this note is higher than the root but the letter is lower, we've wrapped
+                const rootLetterPosition = letters.indexOf(rootLetter);
+                const noteLetterPosition = letters.indexOf(noteLetter);
+                
+                if (note > root && noteLetterPosition < rootLetterPosition) {
+                    // We've wrapped around (e.g., A to C means C is in next octave)
+                    const rootOctave = Math.floor(root / 12) - 1;
+                    noteOctave = rootOctave + 1;
+                } else if (note >= root) {
+                    // Same octave or higher, calculate based on root
+                    const rootOctave = Math.floor(root / 12) - 1;
+                    noteOctave = rootOctave;
+                }
+                
+                // Now verify the accidental at this octave
+                const expectedMidi = (noteOctave + 1) * 12 + naturalPC;
+                let accidental = null;
+                
+                if (note === expectedMidi) {
+                    accidental = null;
+                } else if (note === expectedMidi + 1) {
+                    accidental = '#';
+                } else if (note === expectedMidi - 1) {
+                    accidental = 'b';
+                } else {
+                    // Wrong octave, adjust
+                    if (note < expectedMidi) {
+                        noteOctave -= 1;
+                    } else {
+                        noteOctave += 1;
+                    }
+                    
+                    // Recalculate accidental
+                    const newExpectedMidi = (noteOctave + 1) * 12 + naturalPC;
+                    if (note === newExpectedMidi) {
+                        accidental = null;
+                    } else if (note === newExpectedMidi + 1) {
+                        accidental = '#';
+                    } else if (note === newExpectedMidi - 1) {
+                        accidental = 'b';
+                    }
+                }
+                
+                result.push({ note: noteLetter, octave: noteOctave, accidental, midi: note });
+            }
+            
+            return { notes: result, symbol: chordSymbol };
+        }
+
+        // ============= DRAWING FUNCTIONS =============
+
+        function drawNotation() {
+            const output = document.getElementById('output');
+            output.innerHTML = '';
+            
+            if (staffMode === 'grand') {
+                drawGrandStaff();
+            } else {
+                drawSingleStaff();
+            }
+        }
+
+        function drawSingleStaff() {
+            const output = document.getElementById('output');
+            const staveWidth = Math.min(100 + (maxNotes * 100), 400);
+            const renderer = new VF.Renderer(output, VF.Renderer.Backends.SVG);
+            renderer.resize(staveWidth * 1.5, 300);
+            const context = renderer.getContext();
+            context.scale(1.5, 1.5);
+
+            const stave = new VF.Stave(10, 20, staveWidth);
+            stave.addClef(selectedClef);
+            stave.setContext(context).draw();
+
+            if (noteGroups.length === 0) return;
+
+            const displayGroups = noteGroups.slice(-maxNotes);
+            const allSpellings = [];
+            
+            // Clear chord display
+            chordDisplay.textContent = '';
+            chordDisplay.classList.remove('visible');
+            
+            // Collect all MIDI notes for key detection
+            const allMidiNotes = [];
+            displayGroups.forEach(group => {
+                allMidiNotes.push(...Array.from(group));
+            });
+            
+            // Determine spelling mode based on what we have
+            if (useFlats === 'auto') {
+                // Check if we have simultaneous notes
+                const hasSimultaneous = displayGroups.some(g => g.size > 1);
+                
+                if (displayGroups.length === 1 && displayGroups[0].size === 2) {
+                    // Exactly 2 notes (could be sequential or simultaneous)
+                    const notes = Array.from(displayGroups[0]);
+                    const spelling = spellTwoNoteInterval(notes[0], notes[1]);
+                    allSpellings.push(spelling.notes);
+                } else if (displayGroups.length === 2 && displayGroups.every(g => g.size === 1)) {
+                    // 2 sequential single notes
+                    const note1 = Array.from(displayGroups[0])[0];
+                    const note2 = Array.from(displayGroups[1])[0];
+                    const spelling = spellTwoNoteInterval(note1, note2);
+                    allSpellings.push([spelling.notes[0]]);
+                    allSpellings.push([spelling.notes[1]]);
+                } else if (hasSimultaneous && displayGroups.some(g => g.size >= 3)) {
+                    // We have chords - try to recognize them
+                    displayGroups.forEach(group => {
+                        const notes = Array.from(group).sort((a, b) => a - b);
+                        if (notes.length >= 3) {
+                            const chord = recognizeChord(notes);
+                            if (chord) {
+                                allSpellings.push(chord.notes);
+                                chordDisplay.textContent = chord.symbol;
+                                chordDisplay.classList.add('visible');
+                            } else {
+                                // Not recognized - use key detection
+                                const key = detectKey(allMidiNotes);
+                                const spelling = notes.map(n => spellNoteInKey(n, key));
+                                allSpellings.push(spelling);
+                            }
+                        } else if (notes.length === 2) {
+                            const spelling = spellTwoNoteInterval(notes[0], notes[1]);
+                            allSpellings.push(spelling.notes);
+                        } else {
+                            // Single note
+                            const key = detectKey(allMidiNotes);
+                            allSpellings.push([spellNoteInKey(notes[0], key)]);
+                        }
+                    });
+                } else {
+                    // 3+ sequential notes or mix - use key detection
+                    const key = detectKey(allMidiNotes);
+                    displayGroups.forEach(group => {
+                        const notes = Array.from(group).sort((a, b) => a - b);
+                        const spelling = notes.map(n => spellNoteInKey(n, key));
+                        allSpellings.push(spelling);
+                    });
+                }
+            } else {
+                // Flat or sharp mode
+                displayGroups.forEach(group => {
+                    const notes = Array.from(group).sort((a, b) => a - b);
+                    const spelling = notes.map(midi => {
+                        const octave = Math.floor(midi / 12) - 1;
+                        const pc = midi % 12;
+                        
+                        if (useFlats === 'flat') {
+                            const noteNames = ['C', 'D', 'D', 'E', 'E', 'F', 'G', 'G', 'A', 'A', 'B', 'B'];
+                            const accs = [null, 'b', null, 'b', null, null, 'b', null, 'b', null, 'b', null];
+                            return { note: noteNames[pc], octave, accidental: accs[pc], midi };
+                        } else {
+                            const noteNames = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
+                            const accs = [null, '#', null, '#', null, null, '#', null, '#', null, '#', null];
+                            return { note: noteNames[pc], octave, accidental: accs[pc], midi };
+                        }
+                    });
+                    allSpellings.push(spelling);
+                });
+            }
+            
+            // Render notes
+            const staveNotes = [];
+            allSpellings.forEach(noteSpellings => {
+                const keys = noteSpellings.map(n => `${n.note}/${n.octave}`);
+                const staveNote = new VF.StaveNote({ keys, duration: 'q', clef: selectedClef });
+                
+                // Add accidentals
+                noteSpellings.forEach((n, idx) => {
+                    if (n.accidental) {
+                        staveNote.addModifier(new VF.Accidental(n.accidental), idx);
+                    }
+                });
+                
+                // Set stem direction
+                const middleKey = keys[Math.floor(keys.length / 2)];
+                const [noteStr, octStr] = middleKey.split('/');
+                const noteMidi = (parseInt(octStr) + 1) * 12 + { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 }[noteStr];
+                const middleLine = selectedClef === 'treble' ? 71 : (selectedClef === 'bass' ? 50 : 60);
+                staveNote.setStemDirection(noteMidi >= middleLine ? VF.Stem.DOWN : VF.Stem.UP);
+                
+                staveNotes.push(staveNote);
+            });
+
+            if (staveNotes.length > 0) {
+                const voice = new VF.Voice({ num_beats: staveNotes.length, beat_value: 4 });
+                voice.setMode(VF.Voice.Mode.SOFT);
+                voice.addTickables(staveNotes);
+                new VF.Formatter().joinVoices([voice]).format([voice], staveWidth - 100);
+                voice.draw(context, stave);
+            }
+        }
+
+        function drawGrandStaff() {
+            const output = document.getElementById('output');
+            const staveWidth = Math.min(100 + (maxNotes * 100), 400);
+            const renderer = new VF.Renderer(output, VF.Renderer.Backends.SVG);
+            renderer.resize(staveWidth * 1.5, 400);
+            const context = renderer.getContext();
+            context.scale(1.5, 1.5);
+
+            const trebleStave = new VF.Stave(10, 20, staveWidth);
+            trebleStave.addClef('treble');
+            trebleStave.setContext(context).draw();
+
+            const bassStave = new VF.Stave(10, 100, staveWidth);
+            bassStave.addClef('bass');
+            bassStave.setContext(context).draw();
+
+            const connector = new VF.StaveConnector(trebleStave, bassStave);
+            connector.setType(VF.StaveConnector.type.BRACE);
+            connector.setContext(context).draw();
+
+            if (noteGroups.length === 0) return;
+
+            const displayGroups = noteGroups.slice(-maxNotes);
+            const allSpellings = [];
+            
+            chordDisplay.textContent = '';
+            chordDisplay.classList.remove('visible');
+            
+            const allMidiNotes = [];
+            displayGroups.forEach(group => {
+                allMidiNotes.push(...Array.from(group));
+            });
+            
+            if (useFlats === 'auto') {
+                const hasSimultaneous = displayGroups.some(g => g.size > 1);
+                
+                if (displayGroups.length === 1 && displayGroups[0].size === 2) {
+                    const notes = Array.from(displayGroups[0]);
+                    const spelling = spellTwoNoteInterval(notes[0], notes[1]);
+                    allSpellings.push(spelling.notes);
+                } else if (displayGroups.length === 2 && displayGroups.every(g => g.size === 1)) {
+                    const note1 = Array.from(displayGroups[0])[0];
+                    const note2 = Array.from(displayGroups[1])[0];
+                    const spelling = spellTwoNoteInterval(note1, note2);
+                    allSpellings.push([spelling.notes[0]]);
+                    allSpellings.push([spelling.notes[1]]);
+                } else if (hasSimultaneous && displayGroups.some(g => g.size >= 3)) {
+                    displayGroups.forEach(group => {
+                        const notes = Array.from(group).sort((a, b) => a - b);
+                        if (notes.length >= 3) {
+                            const chord = recognizeChord(notes);
+                            if (chord) {
+                                allSpellings.push(chord.notes);
+                                chordDisplay.textContent = chord.symbol;
+                                chordDisplay.classList.add('visible');
+                            } else {
+                                const key = detectKey(allMidiNotes);
+                                const spelling = notes.map(n => spellNoteInKey(n, key));
+                                allSpellings.push(spelling);
+                            }
+                        } else if (notes.length === 2) {
+                            const spelling = spellTwoNoteInterval(notes[0], notes[1]);
+                            allSpellings.push(spelling.notes);
+                        } else {
+                            const key = detectKey(allMidiNotes);
+                            allSpellings.push([spellNoteInKey(notes[0], key)]);
+                        }
+                    });
+                } else {
+                    const key = detectKey(allMidiNotes);
+                    displayGroups.forEach(group => {
+                        const notes = Array.from(group).sort((a, b) => a - b);
+                        const spelling = notes.map(n => spellNoteInKey(n, key));
+                        allSpellings.push(spelling);
+                    });
+                }
+            } else {
+                displayGroups.forEach(group => {
+                    const notes = Array.from(group).sort((a, b) => a - b);
+                    const spelling = notes.map(midi => {
+                        const octave = Math.floor(midi / 12) - 1;
+                        const pc = midi % 12;
+                        
+                        if (useFlats === 'flat') {
+                            const noteNames = ['C', 'D', 'D', 'E', 'E', 'F', 'G', 'G', 'A', 'A', 'B', 'B'];
+                            const accs = [null, 'b', null, 'b', null, null, 'b', null, 'b', null, 'b', null];
+                            return { note: noteNames[pc], octave, accidental: accs[pc], midi };
+                        } else {
+                            const noteNames = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
+                            const accs = [null, '#', null, '#', null, null, '#', null, '#', null, '#', null];
+                            return { note: noteNames[pc], octave, accidental: accs[pc], midi };
+                        }
+                    });
+                    allSpellings.push(spelling);
+                });
+            }
+            
+            const trebleNotes = [];
+            const bassNotes = [];
+
+            allSpellings.forEach(noteSpellings => {
+                const trebleKeys = [];
+                const bassKeys = [];
+                const trebleAccidentals = [];
+                const bassAccidentals = [];
+
+                noteSpellings.forEach(n => {
+                    const noteStr = `${n.note}/${n.octave}`;
+                    if (n.midi >= 60) {
+                        trebleKeys.push(noteStr);
+                        if (n.accidental) {
+                            trebleAccidentals.push({ index: trebleKeys.length - 1, accidental: n.accidental });
+                        }
+                    } else {
+                        bassKeys.push(noteStr);
+                        if (n.accidental) {
+                            bassAccidentals.push({ index: bassKeys.length - 1, accidental: n.accidental });
+                        }
+                    }
+                });
+
+                if (trebleKeys.length > 0) {
+                    const staveNote = new VF.StaveNote({ keys: trebleKeys, duration: 'q', clef: 'treble' });
+                    const middleKey = trebleKeys[Math.floor(trebleKeys.length / 2)];
+                    const [noteStr, octStr] = middleKey.split('/');
+                    const noteMidi = (parseInt(octStr) + 1) * 12 + { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 }[noteStr];
+                    staveNote.setStemDirection(noteMidi >= 71 ? VF.Stem.DOWN : VF.Stem.UP);
+                    trebleAccidentals.forEach(({ index, accidental }) => {
+                        staveNote.addModifier(new VF.Accidental(accidental), index);
+                    });
+                    trebleNotes.push(staveNote);
+                } else {
+                    trebleNotes.push(new VF.GhostNote({ duration: 'q' }));
+                }
+
+                if (bassKeys.length > 0) {
+                    const staveNote = new VF.StaveNote({ keys: bassKeys, duration: 'q', clef: 'bass' });
+                    const middleKey = bassKeys[Math.floor(bassKeys.length / 2)];
+                    const [noteStr, octStr] = middleKey.split('/');
+                    const noteMidi = (parseInt(octStr) + 1) * 12 + { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 }[noteStr];
+                    staveNote.setStemDirection(noteMidi >= 50 ? VF.Stem.DOWN : VF.Stem.UP);
+                    bassAccidentals.forEach(({ index, accidental }) => {
+                        staveNote.addModifier(new VF.Accidental(accidental), index);
+                    });
+                    bassNotes.push(staveNote);
+                } else {
+                    bassNotes.push(new VF.GhostNote({ duration: 'q' }));
+                }
+            });
+
+            if (trebleNotes.length > 0) {
+                const trebleVoice = new VF.Voice({ num_beats: trebleNotes.length, beat_value: 4 });
+                trebleVoice.setMode(VF.Voice.Mode.SOFT);
+                trebleVoice.addTickables(trebleNotes);
+                new VF.Formatter().joinVoices([trebleVoice]).format([trebleVoice], staveWidth - 100);
+                trebleVoice.draw(context, trebleStave);
+            }
+
+            if (bassNotes.length > 0) {
+                const bassVoice = new VF.Voice({ num_beats: bassNotes.length, beat_value: 4 });
+                bassVoice.setMode(VF.Voice.Mode.SOFT);
+                bassVoice.addTickables(bassNotes);
+                new VF.Formatter().joinVoices([bassVoice]).format([bassVoice], staveWidth - 100);
+                bassVoice.draw(context, bassStave);
+            }
+        }
+
+        function onMIDIMessage(event) {
+            const command = event.data[0];
+            const note = event.data[1];
+            const velocity = event.data.length > 2 ? event.data[2] : 0;
+            const currentTime = Date.now();
+
+            if ((command & 0xf0) === 0x90 && velocity > 0) {
+                if (toggleMode) {
+                    if (toggledKeys.has(note)) {
+                        // Untoggle: remove this note from the toggled set
+                        toggledKeys.delete(note);
+                        highlightKey(note, false);
+                    } else {
+                        // Toggle on: add to toggled set
+                        toggledKeys.add(note);
+                        const timeDiff = currentTime - lastNoteTime;
+                        
+                        if ((timeDiff < CHORD_THRESHOLD || shiftHeld) && noteGroups.length > 0) {
+                            noteGroups[noteGroups.length - 1].add(note);
+                        } else {
+                            noteGroups.push(new Set([note]));
+                            if (noteGroups.length > maxNotes) noteGroups.shift();
+                        }
+                        
+                        if (!shiftHeld) lastNoteTime = currentTime;
+                        highlightKey(note, true, currentColor);
+                    }
+                    
+                    // Rebuild noteGroups from currently toggled keys
+                    rebuildNoteGroupsFromToggledKeys();
+                } else {
+                    const timeDiff = currentTime - lastNoteTime;
+                    
+                    if ((timeDiff < CHORD_THRESHOLD || shiftHeld) && noteGroups.length > 0) {
+                        noteGroups[noteGroups.length - 1].add(note);
+                    } else {
+                        noteGroups.push(new Set([note]));
+                        if (noteGroups.length > maxNotes) noteGroups.shift();
+                    }
+                    
+                    if (!shiftHeld) lastNoteTime = currentTime;
+                    highlightKey(note, true, currentColor);
+                }
+            } else if (((command & 0xf0) === 0x80 || ((command & 0xf0) === 0x90 && velocity === 0)) && !toggleMode) {
+                // Remove note from all groups
+                noteGroups.forEach(group => group.delete(note));
+                // Remove empty groups (iterate backwards to avoid index issues)
+                for (let i = noteGroups.length - 1; i >= 0; i--) {
+                    if (noteGroups[i].size === 0) {
+                        noteGroups.splice(i, 1);
+                    }
+                }
+                highlightKey(note, false);
+            }
+            
+            drawNotation();
+        }
+
+        function connectToDevice(input) {
+            if (currentInput) currentInput.onmidimessage = null;
+            currentInput = input;
+            input.onmidimessage = onMIDIMessage;
+        }
+
+        function onMIDISuccess(midiAccess) {
+            const inputs = Array.from(midiAccess.inputs.values());
+            if (inputs.length === 0) {
+                alert('No MIDI devices found');
+                return;
+            }
+            
+            connectBtn.style.display = 'none';
+            deviceList.style.display = 'flex';
+            accidentalControls.style.display = 'flex';
+            rangeControls.style.display = 'flex';
+            staffControls.style.display = 'flex';
+            displayControls.style.display = 'flex';
+            ['divider1', 'divider2', 'divider3', 'divider4', 'divider5'].forEach(id => {
+                document.getElementById(id).style.display = 'block';
+            });
+            
+            deviceSelect.innerHTML = '';
+            inputs.forEach((input, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = input.name || `Device ${index + 1}`;
+                deviceSelect.appendChild(option);
+            });
+            
+            connectToDevice(inputs[0]);
+            deviceSelect.addEventListener('change', function() {
+                connectToDevice(inputs[parseInt(this.value)]);
+            });
+        }
+
+        function onMIDIFailure(error) {
+            alert('MIDI access failed: ' + error.message);
+        }
+
+        connectBtn.addEventListener('click', function() {
+            if (!navigator.requestMIDIAccess) {
+                alert('Web MIDI not supported. Use Chrome, Edge, or Opera.');
+                return;
+            }
+            navigator.requestMIDIAccess().then(onMIDISuccess).catch(onMIDIFailure);
+        });
+
+        document.querySelectorAll('input[name="accidental"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                useFlats = this.value;
+                drawNotation();
+            });
+        });
+
+        lowestKeySelect.addEventListener('change', function() {
+            const newLowest = parseInt(this.value);
+            if (newLowest <= highestMidi) {
+                lowestMidi = newLowest;
+                createPiano();
+            } else {
+                this.value = lowestMidi;
+                alert('Lowest key must be lower than or equal to highest key');
+            }
+        });
+
+        highestKeySelect.addEventListener('change', function() {
+            const newHighest = parseInt(this.value);
+            if (newHighest >= lowestMidi) {
+                highestMidi = newHighest;
+                createPiano();
+            } else {
+                this.value = highestMidi;
+                alert('Highest key must be higher than or equal to lowest key');
+            }
+        });
+
+        maxNotesSelect.addEventListener('change', function() {
+            maxNotes = parseInt(this.value);
+            drawNotation();
+        });
+
+        clefSelect.addEventListener('change', function() {
+            selectedClef = this.value;
+            drawNotation();
+        });
+
+        staffModeSelect.addEventListener('change', function() {
+            staffMode = this.value;
+            clefSelect.disabled = (staffMode === 'grand');
+            drawNotation();
+        });
+
+        toggleModeCheckbox.addEventListener('change', function() {
+            toggleMode = this.checked;
+            resetBtn.style.display = toggleMode ? 'inline-block' : 'none';
+            if (!toggleMode) toggledKeys.clear();
+        });
+
+        resetBtn.addEventListener('click', resetAllNotes);
+
+        toggleUIBtn.addEventListener('click', function() {
+            uiVisible = !uiVisible;
+            controlsContainer.classList.toggle('hidden', !uiVisible);
+            toggleUIBtn.textContent = uiVisible ? 'Hide UI' : 'Show UI';
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.target.tagName === 'SELECT' || event.target.tagName === 'INPUT') return;
+            
+            if (event.key === 'Control') {
+                shiftHeld = true;
+            } else if (event.key.toLowerCase() === 'c') {
+                event.preventDefault();
+                const currentIndex = colors.indexOf(currentColor);
+                currentColor = colors[(currentIndex + 1) % colors.length];
+                document.querySelectorAll('.color-swatch').forEach((swatch, i) => {
+                    swatch.classList.toggle('active', i === (currentIndex + 1) % colors.length);
+                });
+            } else if (event.key.toLowerCase() === 'a') {
+                event.preventDefault();
+                const options = ['flat', 'sharp', 'auto'];
+                const currentIndex = options.indexOf(useFlats);
+                useFlats = options[(currentIndex + 1) % options.length];
+                document.querySelector(`input[name="accidental"][value="${useFlats}"]`).checked = true;
+                drawNotation();
+            } else if (event.key.toLowerCase() === 't') {
+                event.preventDefault();
+                toggleMode = !toggleMode;
+                toggleModeCheckbox.checked = toggleMode;
+                resetBtn.style.display = toggleMode ? 'inline-block' : 'none';
+                if (!toggleMode) toggledKeys.clear();
+            } else if (event.key.toLowerCase() === 'r' && toggleMode) {
+                event.preventDefault();
+                resetAllNotes();
+            } else if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(event.key)) {
+                event.preventDefault();
+                maxNotes = parseInt(event.key);
+                maxNotesSelect.value = maxNotes;
+                drawNotation();
+            }
+        });
+
+        document.addEventListener('keyup', function(event) {
+            if (event.key === 'Control') shiftHeld = false;
+        });
+
+        populateColorSwatches();
+        populateKeySelectors();
+        createPiano();
+        drawNotation();
+    </script>
+</body>
+</html>
