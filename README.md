@@ -1,3 +1,5 @@
 # Show Piano
 
 A Webapp that dsiplays a customizable keyboard and notation. Can be controlled via midi or manual input.
+
+Try it: [https://peterheliko.github.io/show-piano] (https://peterheliko.github.io/show-piano/)
