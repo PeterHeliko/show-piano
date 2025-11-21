@@ -58,8 +58,13 @@
         button:hover {
             background: #0056b3;
         }
-        #deviceList, #accidental-controls, #range-controls, #display-controls, #staff-controls {
+        #deviceList {
             display: none;
+            gap: 10px;
+            align-items: center;
+        }
+        #accidental-controls, #range-controls, #display-controls, #staff-controls {
+            display: flex;
             gap: 10px;
             align-items: center;
         }
@@ -70,18 +75,13 @@
             border-radius: 4px;
         }
         #accidental-controls {
-            display: none;
             gap: 15px;
         }
         #accidental-controls label, #display-controls label, #staff-controls label {
             cursor: pointer;
             font-size: 14px;
         }
-        #range-controls, #display-controls, #staff-controls {
-            display: none;
-            gap: 10px;
-            align-items: center;
-        }
+
         .divider {
             width: 1px;
             height: 25px;
@@ -159,12 +159,11 @@
     
     <div id="controls-container">
         <button id="connect">Enable MIDI</button>
-        <div class="divider" id="divider1" style="display: none;"></div>
         <div id="deviceList">
             <label>MIDI Device:</label>
             <select id="deviceSelect"></select>
         </div>
-        <div class="divider" id="divider2" style="display: none;"></div>
+        <div class="divider" id="divider1"></div>
         <div id="accidental-controls">
             <label>
                 <input type="radio" name="accidental" value="flat" checked> Flats
@@ -177,14 +176,14 @@
             </label>
             <span class="shortcut">(A)</span>
         </div>
-        <div class="divider" id="divider3" style="display: none;"></div>
+        <div class="divider" id="divider2"></div>
         <div id="range-controls">
             <label>From:</label>
             <select id="lowestKey" class="range-select"></select>
             <label>To:</label>
             <select id="highestKey" class="range-select"></select>
         </div>
-        <div class="divider" id="divider4" style="display: none;"></div>
+        <div class="divider" id="divider3"></div>
         <div id="staff-controls">
             <label>Clef:</label>
             <select id="clefSelect">
@@ -198,7 +197,7 @@
                 <option value="grand">Grand (Piano)</option>
             </select>
         </div>
-        <div class="divider" id="divider5" style="display: none;"></div>
+        <div class="divider" id="divider4"></div>
         <div id="display-controls">
             <label>Max notes:</label>
             <select id="maxNotesSelect">
@@ -1191,13 +1190,6 @@
             
             connectBtn.style.display = 'none';
             deviceList.style.display = 'flex';
-            accidentalControls.style.display = 'flex';
-            rangeControls.style.display = 'flex';
-            staffControls.style.display = 'flex';
-            displayControls.style.display = 'flex';
-            ['divider1', 'divider2', 'divider3', 'divider4', 'divider5'].forEach(id => {
-                document.getElementById(id).style.display = 'block';
-            });
             
             deviceSelect.innerHTML = '';
             inputs.forEach((input, index) => {
